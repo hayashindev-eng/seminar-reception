@@ -195,7 +195,6 @@ function renderCards() {
         <div class="acard-name">${escHtml(a.name)}</div>
         ${type ? `<span class="type-badge ${type.cls}">${escHtml(type.label)}</span>` : ''}
       </div>
-      ${a.email ? `<div class="acard-email">${escHtml(a.email)}</div>` : ''}
       <div class="acard-bottom">
         <span class="status-chip sc-${sc}">${statusIcon(a.status)} ${statusLabel(a.status)}</span>
         ${dots ? `<div class="cl-dots">${dots}</div>` : ''}
