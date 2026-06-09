@@ -34,7 +34,10 @@
         <span class="sd sd-green"></span>
         <span id="hdrChecked">0</span>/<span id="hdrTotal">0</span> 受付済
       </div>
-      <button class="text-btn tonal-btn ripple-host" onclick="openSummary()" style="margin-left:6px">
+      <button class="text-btn tonal-btn ripple-host" onclick="openAddDialog()" style="margin-left:6px">
+        <span class="nav-icon" style="font-size:18px;vertical-align:-4px">person_add</span> 当日追加
+      </button>
+      <button class="text-btn tonal-btn ripple-host" onclick="openSummary()">
         <span class="nav-icon" style="font-size:18px;vertical-align:-4px">bar_chart</span> 集計
       </button>
       <button class="icon-btn ripple-host" onclick="goToSettings()" title="設定" aria-label="設定"><span class="nav-icon" style="font-size:22px">settings</span></button>
@@ -205,6 +208,32 @@
       <button class="btn-text ripple-host ripple-dark" onclick="closePinDialog()">キャンセル</button>
       <button class="btn-filled ripple-host" style="flex:none;padding:0 24px;height:44px" onclick="submitPin()">認証</button>
     </div>
+  </div>
+</div>
+
+<!-- ─── 当日追加ダイアログ ───────── -->
+<div class="dlg-scrim" id="addDlgScrim"></div>
+<div class="dlg-wrap" id="addDlgWrap">
+  <div class="pin-dialog" role="dialog" aria-modal="true">
+    <div class="pin-body">
+      <div class="pin-title"><span class="nav-icon" style="font-size:22px;vertical-align:-4px">person_add</span> 当日参加を追加</div>
+      <div class="pin-sub">リストにない当日参加者を追加して受付します</div>
+      <input class="field-input" id="addNameInput" type="text" placeholder="氏名を入力" autocomplete="off" style="margin-top:10px">
+      <div class="pin-error" id="addError"></div>
+    </div>
+    <div class="pin-footer">
+      <button class="btn-text ripple-host ripple-dark" onclick="closeAddDialog()">キャンセル</button>
+      <button class="btn-filled ripple-host" style="flex:none;padding:0 24px;height:44px" onclick="submitAdd()">追加して受付へ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 受付完了フラッシュ ───────── -->
+<div class="flash-overlay" id="flashOverlay">
+  <div class="flash-card">
+    <div class="flash-icon" id="flashIcon">✓</div>
+    <div class="flash-name" id="flashName"></div>
+    <div class="flash-text" id="flashText"></div>
   </div>
 </div>
 

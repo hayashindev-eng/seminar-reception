@@ -187,6 +187,56 @@ function updateChecklist(rowIndex, clValues, sessionToken) {
   }
 }
 
+// 飛び込み参加者をスプレッドシートに追加する
+function addAttendee(name, sessionToken) {
+  try {
+    const cfg = getSettingsInternal();
+
+    if (cfg.PIN_ENABLED === 'true' && !validateSession(sessionToken)) {
+      return { success: false, error: '認証が必要です。再度ログインしてください。', authRequired: true };
+    }
+
+    const cleanName = String(name || '').trim();
+    if (!cleanName) return { success: false, error: '氏名を入力してください。' };
+
+    if (!cfg.SPREADSHEET_ID || !cfg.SHEET_NAME) {
+      return { success: false, error: 'スプレッドシートが設定されていません。' };
+    }
+
+    const ss    = SpreadsheetApp.openById(normalizeSpreadsheetId(cfg.SPREADSHEET_ID));
+    const sheet = ss.getSheetByName(cfg.SHEET_NAME);
+    if (!sheet) return { success: false, error: `シート「${cfg.SHEET_NAME}」が見つかりません。` };
+
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(5000)) {
+      return { success: false, error: '他の端末が処理中です。しばらくしてから再試行してください。' };
+    }
+
+    try {
+      const colName = parseInt(cfg.COL_NAME) || 2;
+      const newRow  = sheet.getLastRow() + 1;
+
+      sheet.getRange(newRow, colName).setValue(cleanName);
+
+      // 当日フィルターが設定されていれば、その値も書いて当日対象に含める
+      const colFilter = parseInt(cfg.COL_FILTER) || 0;
+      const filterVal = (cfg.FILTER_VALUE || '').trim();
+      if (colFilter > 0 && filterVal) {
+        sheet.getRange(newRow, colFilter).setValue(filterVal);
+      }
+
+      SpreadsheetApp.flush();
+      return { success: true, rowIndex: newRow };
+
+    } finally {
+      lock.releaseLock();
+    }
+
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 // ─── ヘルパー関数 ────────────────────────────────
 
 // 列番号を 0-indexed で返す（未設定や0はマイナス1）

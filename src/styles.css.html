@@ -558,4 +558,36 @@ body {
 .snack { background:#1e293b;color:#fff;padding:13px 18px;border-radius:var(--shape-sm);font-size:14px;font-weight:500;display:flex;align-items:center;gap:10px;box-shadow:var(--elev-4);animation:snackIn var(--motion-enter) forwards;pointer-events:none;max-width:460px; }
 @keyframes snackIn { from{opacity:0;transform:translateY(18px)scale(.9)} to{opacity:1;transform:translateY(0)scale(1)} }
 @keyframes snackOut { to{opacity:0;transform:translateY(8px)scale(.95)} }
+
+/* ─── 受付完了フラッシュ ─────────────────────────── */
+.flash-overlay {
+  position:fixed;inset:0;z-index:300;
+  display:flex;align-items:center;justify-content:center;
+  pointer-events:none;opacity:0;
+  transition:opacity .15s ease;
+}
+.flash-overlay.show { opacity:1; }
+.flash-card {
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:36px 60px;border-radius:var(--shape-xl);
+  background:var(--md-surface);box-shadow:var(--elev-5);
+  transform:scale(.7);opacity:0;
+}
+.flash-overlay.show .flash-card { animation:flashPop .45s cubic-bezier(.2,.9,.2,1.2) forwards; }
+.flash-icon {
+  width:92px;height:92px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:52px;font-weight:700;color:#fff;
+}
+.flash-green .flash-icon { background:var(--status-checked); }
+.flash-red   .flash-icon { background:var(--status-absent); }
+.flash-name { font-size:27px;font-weight:700;color:var(--md-on-surface);margin-top:10px;text-align:center; }
+.flash-text { font-size:15px;font-weight:600; }
+.flash-green .flash-text { color:var(--status-checked); }
+.flash-red   .flash-text { color:var(--status-absent); }
+@keyframes flashPop {
+  0%   { transform:scale(.7);opacity:0; }
+  55%  { transform:scale(1.06);opacity:1; }
+  100% { transform:scale(1);opacity:1; }
+}
 </style>

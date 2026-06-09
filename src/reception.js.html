@@ -20,6 +20,7 @@ const STATE = {
   eventName:    '',
   eventDate:    '',
   current:      null,   // 現在開いているシートの参加者オブジェクト
+  busy:         false,  // 受付/追加など処理中フラグ（ポーリング競合防止）
 };
 
 // ─── SHA-256 ハッシュ ─────────────────────────────────────
@@ -318,6 +319,7 @@ async function doAction(action) {
   const clValues  = STATE.current.clValues || {};
   const staffName = '';
 
+  STATE.busy = true;
   setLoading(true, action === 'check_in' ? '受付中...' : action === 'absent' ? '欠席処理中...' : '取消中...');
 
   try {
@@ -339,14 +341,22 @@ async function doAction(action) {
     }
 
     const msgs = { check_in: '受付しました', absent: '欠席にしました', cancel: '取消しました' };
-    const icons = { check_in: '✓', absent: '✕', cancel: '↩' };
-    showSnack(msgs[action], icons[action]);
+    const name = a ? a.name : '';
 
     closeSheet();
     renderAll();
+
+    // 受付・欠席は音＋大きなフィードバック。取消は控えめに。
+    if (action === 'check_in' || action === 'absent') {
+      playBeep(action);
+      showFlash(action, name, msgs[action]);
+    } else {
+      showSnack(msgs[action], '↩');
+    }
   } catch (err) {
     showSnack('通信エラー: ' + err.message, '⚠', 5000);
   } finally {
+    STATE.busy = false;
     setLoading(false);
   }
 }
@@ -491,10 +501,91 @@ function goToSettings() {
   window.top.location.href = window.WEBAPP_URL + '?page=settings';
 }
 
+// ─── 受付完了の音 ─────────────────────────────────────────
+let _audioCtx;
+function playBeep(kind) {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    const now = _audioCtx.currentTime;
+    const beep = (freq, start, dur) => {
+      const o = _audioCtx.createOscillator();
+      const g = _audioCtx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      o.connect(g); g.connect(_audioCtx.destination);
+      g.gain.setValueAtTime(0.0001, now + start);
+      g.gain.exponentialRampToValueAtTime(0.35, now + start + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + start + dur);
+      o.start(now + start);
+      o.stop(now + start + dur + 0.02);
+    };
+    if (kind === 'check_in') { beep(880, 0, 0.12); beep(1320, 0.12, 0.18); } // 上がる二音「ピポッ」
+    else { beep(440, 0, 0.28); }                                            // 欠席は低い単音
+  } catch (_) {}
+}
+
+// ─── 受付完了の大きなフィードバック表示 ──────────────────
+function showFlash(kind, name, text) {
+  const ov   = document.getElementById('flashOverlay');
+  if (!ov) return;
+  const icon = document.getElementById('flashIcon');
+  const nm   = document.getElementById('flashName');
+  const tx   = document.getElementById('flashText');
+  ov.className = 'flash-overlay show ' + (kind === 'check_in' ? 'flash-green' : 'flash-red');
+  icon.textContent = kind === 'check_in' ? '✓' : '✕';
+  nm.textContent   = name || '';
+  tx.textContent   = text || '';
+  clearTimeout(showFlash._t);
+  showFlash._t = setTimeout(() => ov.classList.remove('show'), 1100);
+}
+
+// ─── 飛び込み参加の追加 ───────────────────────────────────
+function openAddDialog() {
+  if (STATE.pinEnabled && !STATE.sessionToken) { openPinDialog(true); return; }
+  document.getElementById('addNameInput').value = '';
+  document.getElementById('addError').textContent = '';
+  document.getElementById('addDlgWrap').classList.add('show');
+  document.getElementById('addDlgScrim').classList.add('show');
+  setTimeout(() => document.getElementById('addNameInput').focus(), 320);
+}
+function closeAddDialog() {
+  document.getElementById('addDlgWrap').classList.remove('show');
+  document.getElementById('addDlgScrim').classList.remove('show');
+}
+async function submitAdd() {
+  const name = document.getElementById('addNameInput').value.trim();
+  if (!name) { document.getElementById('addError').textContent = '氏名を入力してください'; return; }
+  STATE.busy = true;
+  setLoading(true, '追加中...');
+  try {
+    const res = await callGAS('addAttendee', name, STATE.sessionToken);
+    if (!res.success) {
+      if (res.authRequired) { closeAddDialog(); openPinDialog(true); }
+      else document.getElementById('addError').textContent = res.error || '追加に失敗しました';
+      return;
+    }
+    closeAddDialog();
+    await loadAttendees();
+    showSnack(name + ' さんを追加しました', '✓');
+    if (res.rowIndex) openSheet(res.rowIndex);   // そのまま受付できるよう詳細を開く
+  } catch (err) {
+    document.getElementById('addError').textContent = '通信エラー: ' + err.message;
+  } finally {
+    STATE.busy = false;
+    setLoading(false);
+  }
+}
+document.getElementById('addNameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitAdd();
+});
+
 // ─── 定期更新（30秒ごと） ────────────────────────────────
 let pollTimer;
 function startPolling() {
   pollTimer = setInterval(async () => {
+    // 詳細シートを開いている / 受付処理中は再描画しない（操作中の画面を壊さない）
+    if (STATE.current || STATE.busy) return;
     try {
       const res = await callGAS('getAttendees');
       if (res && res.success) {
