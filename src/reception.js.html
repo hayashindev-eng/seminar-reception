@@ -112,6 +112,8 @@ function filtered() {
   if (STATE.filter === 'pending')   list = list.filter(a => a.status === 'pending');
   if (STATE.filter === 'checked')   list = list.filter(a => a.status === 'checked_in');
   if (STATE.filter === 'absent')    list = list.filter(a => a.status === 'absent');
+  // 氏名順（五十音順）にソート
+  list = list.slice().sort((a, b) => a.name.localeCompare(b.name, 'ja'));
   return list;
 }
 
