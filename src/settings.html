@@ -34,7 +34,7 @@ html, body { height:auto; overflow:auto; }
       </div>
     </div>
     <div class="top-bar-right">
-      <a href="?page=reception" style="text-decoration:none">
+      <a href="javascript:void(0)" onclick="window.top.location.href=(window.top.location.href).replace(/\?.*$/,'')" style="text-decoration:none">
         <button class="text-btn tonal-btn ripple-host">← 受付画面へ戻る</button>
       </a>
     </div>
@@ -198,7 +198,7 @@ html, body { height:auto; overflow:auto; }
 
       <!-- 保存ボタン -->
       <div class="sg-actions">
-        <button class="btn-test ripple-host" onclick="window.location.href='?page=reception'">キャンセル</button>
+        <button class="btn-test ripple-host" onclick="window.top.location.href=(window.top.location.href).replace(/\?.*$/,'')">キャンセル</button>
         <button class="btn-save ripple-host" onclick="saveSettings()"><span class="nav-icon" style="font-size:17px;vertical-align:-4px">save</span> 設定を保存する</button>
       </div>
 
