@@ -487,8 +487,7 @@ function toggleNames(id) {
 
 // ─── 設定画面へ遷移 ──────────────────────────────────────
 function goToSettings() {
-  const base = (window.top.location.href).replace(/\?.*$/, '');
-  window.top.location.href = base + '?page=settings';
+  window.top.location.href = window.WEBAPP_URL + '?page=settings';
 }
 
 // ─── 定期更新（30秒ごと） ────────────────────────────────

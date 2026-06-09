@@ -250,7 +250,7 @@ async function saveSettings() {
       return;
     }
     showSnack('設定を保存しました', '✓');
-    setTimeout(() => { window.top.location.href = (window.top.location.href).replace(/\?.*$/, ''); }, 1200);
+    setTimeout(() => { window.top.location.href = window.WEBAPP_URL; }, 1200);
   } catch (err) {
     showSnack('通信エラー: ' + err.message, '⚠', 5000);
   } finally {

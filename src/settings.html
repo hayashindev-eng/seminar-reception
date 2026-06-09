@@ -34,7 +34,7 @@ html, body { height:auto; overflow:auto; }
       </div>
     </div>
     <div class="top-bar-right">
-      <a href="javascript:void(0)" onclick="window.top.location.href=(window.top.location.href).replace(/\?.*$/,'')" style="text-decoration:none">
+      <a href="javascript:void(0)" onclick="window.top.location.href=window.WEBAPP_URL" style="text-decoration:none">
         <button class="text-btn tonal-btn ripple-host">← 受付画面へ戻る</button>
       </a>
     </div>
@@ -198,7 +198,7 @@ html, body { height:auto; overflow:auto; }
 
       <!-- 保存ボタン -->
       <div class="sg-actions">
-        <button class="btn-test ripple-host" onclick="window.top.location.href=(window.top.location.href).replace(/\?.*$/,'')">キャンセル</button>
+        <button class="btn-test ripple-host" onclick="window.top.location.href=window.WEBAPP_URL">キャンセル</button>
         <button class="btn-save ripple-host" onclick="saveSettings()"><span class="nav-icon" style="font-size:17px;vertical-align:-4px">save</span> 設定を保存する</button>
       </div>
 
@@ -209,6 +209,7 @@ html, body { height:auto; overflow:auto; }
 <!-- スナックバー -->
 <div class="snack-stack" id="snackStack"></div>
 
+<script>window.WEBAPP_URL = '<?= webAppUrl ?>';</script>
 <?!= include('settings.js') ?>
 </body>
 </html>

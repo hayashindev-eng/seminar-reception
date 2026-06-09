@@ -12,6 +12,9 @@ function doGet(e) {
     template = HtmlService.createTemplateFromFile('index');
   }
 
+  // クライアントへ Web アプリの公開 URL を渡す（iframe からの top 遷移用）
+  template.webAppUrl = ScriptApp.getService().getUrl();
+
   return template.evaluate()
     .setTitle('セミナー受付システム')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
