@@ -80,11 +80,14 @@ function testConnection(spreadsheetId, sheetName) {
     let headers = [];
     let preview = [];
     if (lastRow >= 1) {
-      headers = sheet.getRange(1, 1, 1, Math.min(lastCol, 20)).getValues()[0];
+      // Date オブジェクトは google.script.run でシリアライズできないため文字列化する
+      headers = sheet.getRange(1, 1, 1, Math.min(lastCol, 20)).getValues()[0]
+                  .map(v => String(v == null ? '' : v));
     }
     if (lastRow >= 2) {
       const rows = Math.min(3, lastRow - 1);
-      preview = sheet.getRange(2, 1, rows, Math.min(lastCol, 10)).getValues();
+      preview = sheet.getRange(2, 1, rows, Math.min(lastCol, 10)).getValues()
+                  .map(r => r.map(v => String(v == null ? '' : v)));
     }
 
     return {
