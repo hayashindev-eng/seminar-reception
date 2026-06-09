@@ -1,0 +1,268 @@
+<script>
+// ─── GAS 呼び出しラッパー ─────────────────────────────────
+function callGAS(fnName, ...args) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)
+      [fnName](...args);
+  });
+}
+
+// ─── SHA-256 ─────────────────────────────────────────────
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ─── スナックバー ─────────────────────────────────────────
+function showSnack(msg, icon = '✓', duration = 3000) {
+  const stack = document.getElementById('snackStack');
+  const el = document.createElement('div');
+  el.className = 'snack';
+  el.textContent = icon + '  ' + msg;
+  stack.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'snackOut .3s ease forwards';
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
+function setLoading(show, text = '処理中...') {
+  const ov = document.getElementById('loadingOverlay');
+  const tx = document.getElementById('loadingText');
+  if (tx) tx.textContent = text;
+  ov.style.display = show ? 'flex' : 'none';
+}
+
+// ─── 現在の設定を読み込んでフォームに反映 ────────────────
+async function loadSettings() {
+  setLoading(true, '設定を読み込み中...');
+  try {
+    const res = await callGAS('getSettings');
+    if (!res.success) {
+      showSnack('設定の読み込みに失敗しました: ' + res.error, '⚠', 5000);
+      return;
+    }
+    const s = res.settings;
+    setVal('eventName',     s.EVENT_NAME        || '');
+    setVal('eventDate',     s.EVENT_DATE        || '');
+    setVal('spreadsheetId', s.SPREADSHEET_ID    || '');
+    setVal('sheetName',     s.SHEET_NAME        || '');
+    setVal('headerRow',     s.HEADER_ROW        || '1');
+    setVal('dataStartRow',  s.DATA_START_ROW    || '2');
+    setVal('colName',       s.COL_NAME          || '2');
+    setVal('colEmail',      s.COL_EMAIL         || '3');
+    setVal('colPhone',      s.COL_PHONE         || '0');
+    setVal('colTicketType', s.COL_TICKET_TYPE   || '0');
+    setVal('colNotes',      s.COL_NOTES         || '0');
+    setVal('colStatus',     s.COL_CHECKIN_STATUS || '10');
+    setVal('colTime',       s.COL_CHECKIN_TIME  || '11');
+    setVal('colStaff',      s.COL_CHECKIN_STAFF || '12');
+    setVal('staffName',     s.STAFF_NAME        || '');
+    setVal('colFilter',     s.COL_FILTER        || '7');
+    setVal('filterValue',   s.FILTER_VALUE      || '');
+
+    const pinEnabled = s.PIN_ENABLED === 'true';
+    const pinSwitch = document.getElementById('pinSwitch');
+    pinSwitch.classList.toggle('on', pinEnabled);
+
+    const clRaw = s.CHECKLIST_ITEMS || '[]';
+    let clItems = [];
+    try { clItems = JSON.parse(clRaw); } catch (_) {}
+    renderClList(clItems);
+  } catch (err) {
+    showSnack('通信エラー: ' + err.message, '⚠', 5000);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function setVal(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val;
+}
+function getVal(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+
+// ─── スイッチ ─────────────────────────────────────────────
+function toggleSwitch(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('on');
+}
+
+// ─── スプレッドシート接続テスト ──────────────────────────
+async function testConnection() {
+  const ssId  = getVal('spreadsheetId');
+  const sheet = getVal('sheetName');
+  if (!ssId) { showSnack('スプレッドシートURLまたはIDを入力してください', '⚠'); return; }
+
+  setLoading(true, '接続テスト中...');
+  try {
+    const res = await callGAS('testConnection', ssId, sheet);
+    if (!res.success) {
+      showSnack('接続失敗: ' + res.error, '⚠', 5000);
+      if (res.availableSheets && res.availableSheets.length) {
+        showSnack('利用可能なシート: ' + res.availableSheets.join(', '), 'ℹ', 7000);
+      }
+      return;
+    }
+    showSnack(`接続成功 — ${res.rowCount}件のデータを確認しました`, '✓', 4000);
+    document.getElementById('testResult').innerHTML =
+      `<div style="margin-top:10px;padding:10px 12px;background:var(--status-checked-cont);border-radius:var(--shape-md);font-size:13px;color:var(--status-checked)">
+        <strong>✓ 接続成功</strong><br>
+        スプレッドシート名: ${escHtml(res.spreadsheetName)}<br>
+        データ件数: ${res.rowCount}行 × ${res.columnCount}列
+      </div>`;
+  } catch (err) {
+    showSnack('通信エラー: ' + err.message, '⚠', 5000);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ─── フィルター値一覧取得 ─────────────────────────────────
+async function loadFilterValues() {
+  const ssId  = getVal('spreadsheetId');
+  const sheet = getVal('sheetName');
+  const col   = getVal('colFilter') || '7';
+  const start = getVal('dataStartRow') || '2';
+  if (!ssId || !sheet) {
+    showSnack('スプレッドシートとシート名を先に入力してください', '⚠');
+    return;
+  }
+  setLoading(true, 'フィルター値を取得中...');
+  try {
+    const res = await callGAS('getFilterValues', ssId, sheet, col, start);
+    if (!res.success || !res.values.length) {
+      showSnack(res.error || '値が見つかりませんでした', '⚠');
+      return;
+    }
+    const current = getVal('filterValue');
+    const select  = document.getElementById('filterValueSelect');
+    select.innerHTML = `<option value="">（絞り込みなし）</option>` +
+      res.values.map(v => `<option value="${escHtml(v)}" ${v === current ? 'selected' : ''}>${escHtml(v)}</option>`).join('');
+    select.style.display = 'block';
+    select.onchange = () => setVal('filterValue', select.value);
+    if (!current && res.values.length) setVal('filterValue', res.values[0]);
+    showSnack(`${res.values.length}件の選択肢を取得しました`, '✓');
+  } catch (err) {
+    showSnack('通信エラー: ' + err.message, '⚠', 5000);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ─── シート一覧取得（スプレッドシートID入力後） ──────────
+async function fetchSheetNames() {
+  const ssId = getVal('spreadsheetId');
+  if (!ssId) return;
+  try {
+    const res = await callGAS('getSheetNames', ssId);
+    if (!res.success || !res.sheets.length) return;
+    const select = document.getElementById('sheetNameSelect');
+    const current = getVal('sheetName');
+    select.innerHTML = res.sheets.map(n =>
+      `<option value="${escHtml(n)}" ${n === current ? 'selected' : ''}>${escHtml(n)}</option>`
+    ).join('');
+    select.style.display = 'block';
+    select.onchange = () => setVal('sheetName', select.value);
+    if (!current && res.sheets.length) setVal('sheetName', res.sheets[0]);
+  } catch (_) {}
+}
+document.getElementById('spreadsheetId').addEventListener('blur', fetchSheetNames);
+
+// ─── チェックリスト ───────────────────────────────────────
+let _clItems = [];
+function renderClList(items) {
+  _clItems = items;
+  const list = document.getElementById('clSettingList');
+  list.innerHTML = items.map((item, i) => `
+    <div class="cl-s-item" data-i="${i}">
+      <span class="cl-s-drag">⠿</span>
+      <input class="cl-s-input" type="text" value="${escHtml(item.label)}" placeholder="項目名" oninput="updateClItem(${i}, 'label', this.value)">
+      <span class="cl-s-lbl">列</span>
+      <input class="cl-s-select" type="number" min="1" max="100" value="${item.col || ''}" placeholder="列番号" style="width:68px" oninput="updateClItem(${i}, 'col', this.value)">
+      <button class="cl-s-del ripple-host" onclick="removeClItem(${i})" aria-label="削除">✕</button>
+    </div>`).join('');
+}
+function updateClItem(i, key, val) {
+  if (_clItems[i]) {
+    _clItems[i][key] = key === 'col' ? (parseInt(val) || 0) : val;
+  }
+}
+function addClItem() {
+  const id = 'cl' + Date.now();
+  _clItems.push({ id, label: '', col: 0 });
+  renderClList(_clItems);
+  const inputs = document.querySelectorAll('.cl-s-input');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+function removeClItem(i) {
+  _clItems.splice(i, 1);
+  renderClList(_clItems);
+}
+
+// ─── 設定保存 ─────────────────────────────────────────────
+async function saveSettings() {
+  const pinEnabled = document.getElementById('pinSwitch').classList.contains('on');
+
+  const settings = {
+    EVENT_NAME:          getVal('eventName'),
+    EVENT_DATE:          getVal('eventDate'),
+    SPREADSHEET_ID:      getVal('spreadsheetId'),
+    SHEET_NAME:          getVal('sheetName'),
+    HEADER_ROW:          getVal('headerRow')     || '1',
+    DATA_START_ROW:      getVal('dataStartRow')  || '2',
+    COL_NAME:            getVal('colName')        || '2',
+    COL_EMAIL:           getVal('colEmail')       || '3',
+    COL_PHONE:           getVal('colPhone')       || '0',
+    COL_TICKET_TYPE:     getVal('colTicketType')  || '0',
+    COL_NOTES:           getVal('colNotes')       || '0',
+    COL_CHECKIN_STATUS:  getVal('colStatus')      || '10',
+    COL_CHECKIN_TIME:    getVal('colTime')        || '11',
+    COL_CHECKIN_STAFF:   getVal('colStaff')       || '12',
+    STAFF_NAME:          getVal('staffName'),
+    COL_FILTER:          getVal('colFilter')   || '7',
+    FILTER_VALUE:        getVal('filterValue'),
+    PIN_ENABLED:         String(pinEnabled),
+    CHECKLIST_ITEMS:     _clItems,
+  };
+
+  // PIN変更
+  const newPin     = getVal('newPin');
+  const currentPin = getVal('currentPin');
+  if (newPin) {
+    if (newPin.length < 4) { showSnack('PINは4桁以上で設定してください', '⚠'); return; }
+    const confirmPin = getVal('confirmPin');
+    if (newPin !== confirmPin) { showSnack('新しいPINが一致しません', '⚠'); return; }
+    settings.PIN_NEW_HASH     = await sha256(newPin);
+    settings.PIN_CURRENT_HASH = currentPin ? await sha256(currentPin) : null;
+  }
+
+  setLoading(true, '設定を保存中...');
+  try {
+    const res = await callGAS('saveSettings', settings);
+    if (!res.success) {
+      showSnack('保存失敗: ' + res.error, '⚠', 5000);
+      return;
+    }
+    showSnack('設定を保存しました', '✓');
+    setTimeout(() => { window.location.href = '?page=reception'; }, 1200);
+  } catch (err) {
+    showSnack('通信エラー: ' + err.message, '⚠', 5000);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ─── エスケープ ───────────────────────────────────────────
+function escHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ─── 初期化 ───────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', loadSettings);
+</script>

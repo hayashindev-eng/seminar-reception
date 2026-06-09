@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<?!= include('styles.css') ?>
+</head>
+<body>
+
+<!-- ローディング -->
+<div class="loading-overlay" id="loadingOverlay" style="display:none">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">読み込み中...</div>
+</div>
+
+<!-- スクリム（シートバック） -->
+<div class="scrim" id="scrim"></div>
+
+<div class="app">
+
+  <!-- ─── トップバー ─────────────────── -->
+  <header class="top-bar">
+    <div class="top-bar-brand">
+      <div class="brand-dot"></div>
+      <div>
+        <div class="brand-title"   id="brandTitle">セミナー受付</div>
+        <div class="brand-subtitle" id="brandSubtitle"></div>
+      </div>
+    </div>
+    <div class="top-bar-right">
+      <div class="stat-pill">
+        <span class="sd sd-green"></span>
+        <span id="hdrChecked">0</span>/<span id="hdrTotal">0</span> 受付済
+      </div>
+      <button class="text-btn tonal-btn ripple-host" onclick="openSummary()" style="margin-left:6px">
+        📊 集計
+      </button>
+      <button class="icon-btn ripple-host" onclick="goToSettings()" title="設定" aria-label="設定">⚙</button>
+      <button class="icon-btn ripple-host" onclick="loadAttendees()" title="更新" aria-label="更新">↻</button>
+    </div>
+  </header>
+
+  <div class="body">
+
+    <!-- ─── 左ナビレール ───────────────── -->
+    <nav class="nav-rail">
+      <div class="search-field">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="searchInput" type="search" placeholder="名前・メールで検索..." autocomplete="off">
+      </div>
+
+      <div class="nav-label">フィルター</div>
+      <button class="nav-item ripple-host ripple-dark active" id="navItem_all" onclick="setFilter('all')">
+        <span class="nav-item-icon">👥</span>
+        <span class="nav-item-label">全員</span>
+        <span class="nav-count" id="navCountAll">0</span>
+      </button>
+      <button class="nav-item ripple-host ripple-dark" id="navItem_pending" onclick="setFilter('pending')">
+        <span class="nav-item-icon">⏳</span>
+        <span class="nav-item-label">未受付</span>
+        <span class="nav-count" id="navCountPending">0</span>
+      </button>
+      <button class="nav-item ripple-host ripple-dark" id="navItem_checked" onclick="setFilter('checked')">
+        <span class="nav-item-icon">✓</span>
+        <span class="nav-item-label">受付済</span>
+        <span class="nav-count" id="navCountChecked">0</span>
+      </button>
+      <button class="nav-item ripple-host ripple-dark" id="navItem_absent" onclick="setFilter('absent')">
+        <span class="nav-item-icon">✕</span>
+        <span class="nav-item-label">欠席</span>
+        <span class="nav-count" id="navCountAbsent">0</span>
+      </button>
+
+      <div class="nav-divider"></div>
+
+      <!-- 統計ウィジェット -->
+      <div class="stats-surface">
+        <div class="stats-head">受付進捗</div>
+        <div class="stats-number" id="statsNumber">0</div>
+        <div class="stats-of" id="statsOf">/ 0 名</div>
+        <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+        <div class="stats-sub-row">
+          <div class="stats-sub-item s-green">
+            <div class="stats-sub-num" id="statSubChecked">0</div>
+            <div class="stats-sub-lbl">受付済</div>
+          </div>
+          <div class="stats-sub-item s-red">
+            <div class="stats-sub-num" id="statSubAbsent">0</div>
+            <div class="stats-sub-lbl">欠席</div>
+          </div>
+          <div class="stats-sub-item s-gray">
+            <div class="stats-sub-num" id="statSubPending">0</div>
+            <div class="stats-sub-lbl">未受付</div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ─── メインコンテンツ ─────────── -->
+    <main class="main">
+      <div class="main-header">
+        <span class="result-count" id="resultCount">0件</span>
+      </div>
+      <div class="cards-grid" id="cardsGrid">
+        <div class="empty">
+          <div class="empty-icon">⏳</div>
+          <div class="empty-title">読み込み中...</div>
+        </div>
+      </div>
+    </main>
+
+  </div><!-- /.body -->
+</div><!-- /.app -->
+
+<!-- ─── チェックイン サイドシート ──── -->
+<div class="ci-sheet" id="ciSheet" role="dialog" aria-modal="true">
+  <div class="sheet-hdr">
+    <button class="sheet-close ripple-host" onclick="closeSheet()" aria-label="閉じる">✕</button>
+    <div class="sheet-name" id="sheetName"></div>
+    <div class="sheet-tags" id="sheetTags"></div>
+  </div>
+
+  <div class="sheet-body">
+    <div id="statusBanner" class="status-banner sb-pending">● 未受付</div>
+
+    <div id="clSection">
+      <div class="section-lbl">確認チェックリスト</div>
+      <div class="cl-list" id="clList"></div>
+    </div>
+  </div>
+
+  <div class="sheet-footer" id="sheetFooter">
+    <div class="action-row">
+      <button class="btn-outlined danger ripple-host" onclick="doAction('absent')">✕ 欠席</button>
+      <button class="btn-filled ripple-host" onclick="doAction('check_in')">✓ 受付する</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 集計ダイアログ ───────────── -->
+<div class="dlg-scrim" id="sumDlgScrim"></div>
+<div class="dlg-wrap" id="sumDlgWrap">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="sumTitle">
+    <div class="dlg-hdr">
+      <div>
+        <div class="dlg-title" id="sumTitle">集計</div>
+        <div class="dlg-subtitle" id="sumSubtitle"></div>
+      </div>
+      <button class="sheet-close ripple-host" onclick="closeSummary()" aria-label="閉じる">✕</button>
+    </div>
+    <div class="dlg-body">
+      <div class="kpi-row">
+        <div class="kpi green"><div class="kpi-val" id="sumKpiChecked">0</div><div class="kpi-lbl">受付済</div></div>
+        <div class="kpi red">  <div class="kpi-val" id="sumKpiAbsent">0</div> <div class="kpi-lbl">欠席</div></div>
+        <div class="kpi gray"> <div class="kpi-val" id="sumKpiPending">0</div><div class="kpi-lbl">未確認</div></div>
+      </div>
+      <div class="prog-label">
+        <span id="sumPct">出席率 0%</span>
+        <span id="sumPctOf">0 / 0 名</span>
+      </div>
+      <div class="prog-bar2">
+        <div class="pf-green" id="pfGreen" style="width:0%"></div>
+        <div class="pf-red"   id="pfRed"   style="width:0%"></div>
+      </div>
+
+      <div class="section-lbl" style="margin-bottom:10px">チェックリスト達成状況</div>
+      <div id="clStats"></div>
+
+      <div style="margin-top:16px">
+        <div class="list-toggle" id="checkedToggle" onclick="toggleNames('checked')">
+          <span>✓ 受付済リスト</span><span class="arr">▼</span>
+        </div>
+        <div class="names-wrap" id="checkedNames"></div>
+
+        <div class="list-toggle" id="absentToggle" onclick="toggleNames('absent')">
+          <span>✕ 欠席リスト</span><span class="arr">▼</span>
+        </div>
+        <div class="names-wrap" id="absentNames"></div>
+
+        <div class="list-toggle" id="pendingToggle" onclick="toggleNames('pending')">
+          <span>⏳ 未受付リスト</span><span class="arr">▼</span>
+        </div>
+        <div class="names-wrap" id="pendingNames"></div>
+      </div>
+    </div>
+    <div class="dlg-footer">
+      <button class="btn-text ripple-host ripple-dark" onclick="closeSummary()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── PIN ダイアログ ───────────── -->
+<div class="dlg-scrim" id="pinDlgScrim"></div>
+<div class="dlg-wrap" id="pinDlgWrap">
+  <div class="pin-dialog" role="dialog" aria-modal="true">
+    <div class="pin-body">
+      <div class="pin-title">🔒 PIN認証</div>
+      <div class="pin-sub">PINコードを入力してください</div>
+      <input class="pin-input" id="pinInput" type="password" inputmode="numeric" maxlength="10" placeholder="••••">
+      <div class="pin-error" id="pinError"></div>
+    </div>
+    <div class="pin-footer">
+      <button class="btn-text ripple-host ripple-dark" onclick="closePinDialog()">キャンセル</button>
+      <button class="btn-filled ripple-host" style="flex:none;padding:0 24px;height:44px" onclick="submitPin()">認証</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── スナックバー ─────────────── -->
+<div class="snack-stack" id="snackStack"></div>
+
+<?!= include('reception.js') ?>
+</body>
+</html>

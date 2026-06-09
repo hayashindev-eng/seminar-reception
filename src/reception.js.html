@@ -1,0 +1,511 @@
+<script>
+// ─── GAS 呼び出しラッパー ─────────────────────────────────
+function callGAS(fnName, ...args) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)
+      [fnName](...args);
+  });
+}
+
+// ─── 状態 ────────────────────────────────────────────────
+const STATE = {
+  attendees:    [],
+  clItems:      [],
+  filter:       'all',
+  search:       '',
+  sessionToken: null,
+  pinEnabled:   false,
+  eventName:    '',
+  eventDate:    '',
+  current:      null,   // 現在開いているシートの参加者オブジェクト
+};
+
+// ─── SHA-256 ハッシュ ─────────────────────────────────────
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ─── リップルエフェクト ───────────────────────────────────
+function addRipple(el, e) {
+  const rect = el.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height) * 2;
+  const wave = document.createElement('span');
+  wave.className = 'ripple-wave';
+  wave.style.cssText = `width:${size}px;height:${size}px;left:${(e.clientX || rect.left + rect.width / 2) - rect.left - size / 2}px;top:${(e.clientY || rect.top + rect.height / 2) - rect.top - size / 2}px`;
+  el.appendChild(wave);
+  wave.addEventListener('animationend', () => wave.remove());
+}
+document.addEventListener('click', e => {
+  const host = e.target.closest('.ripple-host');
+  if (host) addRipple(host, e);
+});
+
+// ─── スナックバー ─────────────────────────────────────────
+function showSnack(msg, icon = '✓', duration = 3000) {
+  const stack = document.getElementById('snackStack');
+  const el = document.createElement('div');
+  el.className = 'snack';
+  el.textContent = icon + '  ' + msg;
+  stack.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'snackOut .3s ease forwards';
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
+// ─── ローディング ─────────────────────────────────────────
+function setLoading(show, text = '読み込み中...') {
+  const ov = document.getElementById('loadingOverlay');
+  const tx = document.getElementById('loadingText');
+  if (tx) tx.textContent = text;
+  ov.style.display = show ? 'flex' : 'none';
+}
+
+// ─── データ読み込み ───────────────────────────────────────
+async function loadAttendees() {
+  setLoading(true, '参加者データを読み込み中...');
+  try {
+    const res = await callGAS('getAttendees');
+    if (!res.success) {
+      if (res.needsSetup) {
+        showSnack('設定が必要です。設定画面からスプレッドシートを設定してください。', '⚙', 6000);
+      } else {
+        showSnack('エラー: ' + res.error, '⚠', 5000);
+      }
+      return;
+    }
+    STATE.attendees  = res.attendees  || [];
+    STATE.clItems    = res.clItems    || [];
+    STATE.pinEnabled = res.pinEnabled || false;
+    STATE.eventName  = res.eventName  || 'セミナー受付';
+    STATE.eventDate  = res.eventDate  || '';
+
+    document.getElementById('brandTitle').textContent    = STATE.eventName;
+    document.getElementById('brandSubtitle').textContent = STATE.eventDate;
+
+    renderAll();
+
+    if (STATE.pinEnabled && !STATE.sessionToken) {
+      openPinDialog();
+    }
+  } catch (err) {
+    showSnack('通信エラー: ' + err.message, '⚠', 5000);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ─── 描画 ─────────────────────────────────────────────────
+function filtered() {
+  let list = STATE.attendees;
+  if (STATE.search) {
+    const q = STATE.search.toLowerCase();
+    list = list.filter(a =>
+      a.name.toLowerCase().includes(q) ||
+      (a.email && a.email.toLowerCase().includes(q)) ||
+      (a.ticketType && a.ticketType.toLowerCase().includes(q))
+    );
+  }
+  if (STATE.filter === 'pending')   list = list.filter(a => a.status === 'pending');
+  if (STATE.filter === 'checked')   list = list.filter(a => a.status === 'checked_in');
+  if (STATE.filter === 'absent')    list = list.filter(a => a.status === 'absent');
+  return list;
+}
+
+function renderAll() {
+  renderStats();
+  renderNavItems();
+  renderCards();
+}
+
+function renderStats() {
+  const all     = STATE.attendees;
+  const checked = all.filter(a => a.status === 'checked_in').length;
+  const absent  = all.filter(a => a.status === 'absent').length;
+  const pending = all.filter(a => a.status === 'pending').length;
+  const total   = all.length;
+  const pct     = total ? Math.round(checked / total * 100) : 0;
+
+  document.getElementById('hdrChecked').textContent  = checked;
+  document.getElementById('hdrTotal').textContent    = total;
+  document.getElementById('statsNumber').textContent = checked;
+  document.getElementById('statsOf').textContent     = `/ ${total} 名`;
+  document.getElementById('progFill').style.width    = pct + '%';
+  document.getElementById('statSubChecked').textContent = checked;
+  document.getElementById('statSubAbsent').textContent  = absent;
+  document.getElementById('statSubPending').textContent = pending;
+}
+
+function renderNavItems() {
+  const all     = STATE.attendees;
+  const checked = all.filter(a => a.status === 'checked_in').length;
+  const absent  = all.filter(a => a.status === 'absent').length;
+  const pending = all.filter(a => a.status === 'pending').length;
+
+  document.getElementById('navCountAll').textContent     = all.length;
+  document.getElementById('navCountPending').textContent = pending;
+  document.getElementById('navCountChecked').textContent = checked;
+  document.getElementById('navCountAbsent').textContent  = absent;
+
+  ['all', 'pending', 'checked', 'absent'].forEach(f => {
+    const el = document.getElementById('navItem_' + f);
+    if (el) el.classList.toggle('active', STATE.filter === f);
+  });
+}
+
+function statusLabel(s) {
+  return s === 'checked_in' ? '受付済' : s === 'absent' ? '欠席' : '未受付';
+}
+function statusIcon(s) {
+  return s === 'checked_in' ? '✓' : s === 'absent' ? '✕' : '●';
+}
+function statusClass(s) {
+  return s === 'checked_in' ? 'checked' : s === 'absent' ? 'absent' : 'pending';
+}
+function cardClass(s) {
+  return s === 'checked_in' ? 'st-checked' : s === 'absent' ? 'st-absent' : '';
+}
+function typeLabel(t) {
+  if (!t) return '';
+  const tl = t.toLowerCase();
+  if (tl.includes('vip') || tl.includes('特別')) return { label: 'VIP', cls: 'tb-vip' };
+  if (tl.includes('スタッフ') || tl.includes('staff')) return { label: 'スタッフ', cls: 'tb-staff' };
+  return { label: t, cls: 'tb-gen' };
+}
+
+function renderCards() {
+  const grid = document.getElementById('cardsGrid');
+  const list = filtered();
+  document.getElementById('resultCount').textContent = `${list.length}件`;
+
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">該当する参加者がいません</div><div class="empty-sub">検索条件を変更してください</div></div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(a => {
+    const sc = statusClass(a.status);
+    const type = typeLabel(a.ticketType);
+    const dots = STATE.clItems.map(cl => `<span class="cli ${a.clValues && a.clValues[cl.id] ? 'on' : ''}"></span>`).join('');
+    return `<button class="acard ripple-host ripple-dark ${cardClass(a.status)}" onclick="openSheet(${a.rowIndex})" data-row="${a.rowIndex}" aria-label="${a.name}の受付">
+      <div class="acard-top">
+        <div class="acard-name">${escHtml(a.name)}</div>
+        ${type ? `<span class="type-badge ${type.cls}">${escHtml(type.label)}</span>` : ''}
+      </div>
+      ${a.email ? `<div class="acard-email">${escHtml(a.email)}</div>` : ''}
+      <div class="acard-bottom">
+        <span class="status-chip sc-${sc}">${statusIcon(a.status)} ${statusLabel(a.status)}</span>
+        ${dots ? `<div class="cl-dots">${dots}</div>` : ''}
+      </div>
+    </button>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ─── フィルター ───────────────────────────────────────────
+function setFilter(f) {
+  STATE.filter = f;
+  renderAll();
+}
+
+// ─── 検索 ─────────────────────────────────────────────────
+let searchTimer;
+document.getElementById('searchInput').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    STATE.search = e.target.value.trim();
+    renderCards();
+  }, 180);
+});
+
+// ─── チェックイン サイドシート ──────────────────────────
+function openSheet(rowIndex) {
+  const a = STATE.attendees.find(x => x.rowIndex === rowIndex);
+  if (!a) return;
+  STATE.current = a;
+
+  const sheet = document.getElementById('ciSheet');
+  const scrim = document.getElementById('scrim');
+
+  document.getElementById('sheetName').textContent = a.name;
+
+  const tags = document.getElementById('sheetTags');
+  const type = typeLabel(a.ticketType);
+  const tagParts = [];
+  if (type) tagParts.push(`<span class="sheet-tag ${type.cls === 'tb-vip' ? 'vip' : ''}">${escHtml(type.label)}</span>`);
+  if (a.email) tagParts.push(`<span class="sheet-tag">${escHtml(a.email)}</span>`);
+  if (a.phone) tagParts.push(`<span class="sheet-tag">📞 ${escHtml(a.phone)}</span>`);
+  tags.innerHTML = tagParts.join('');
+
+  renderSheetStatus(a.status);
+  renderChecklist(a);
+
+  const footer = document.getElementById('sheetFooter');
+  if (a.status === 'pending') {
+    footer.innerHTML = `
+      <div class="action-row">
+        <button class="btn-outlined danger ripple-host" onclick="doAction('absent')">✕ 欠席</button>
+        <button class="btn-filled ripple-host" onclick="doAction('check_in')">✓ 受付する</button>
+      </div>`;
+  } else {
+    footer.innerHTML = `
+      <div class="action-row">
+        <button class="btn-text ripple-host ripple-dark" onclick="doAction('cancel')">取消</button>
+        <button class="btn-outlined ripple-host" onclick="doUpdateCl()">チェックリスト更新</button>
+      </div>`;
+  }
+
+  scrim.classList.add('show');
+  sheet.classList.add('show');
+}
+
+function renderSheetStatus(status) {
+  const sc = statusClass(status);
+  const banner = document.getElementById('statusBanner');
+  banner.className = `status-banner sb-${sc}`;
+  banner.textContent = statusIcon(status) + '  ' + statusLabel(status);
+}
+
+function renderChecklist(a) {
+  const section = document.getElementById('clSection');
+  if (!STATE.clItems.length) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+  const list = document.getElementById('clList');
+  list.innerHTML = STATE.clItems.map(cl => {
+    const checked = a.clValues && a.clValues[cl.id];
+    return `<div class="cl-item ripple-host ripple-dark ${checked ? 'on' : ''}" onclick="toggleCl('${cl.id}')" data-cl="${cl.id}">
+      <div class="cl-check"><span class="cl-check-mark">✓</span></div>
+      <span class="cl-label">${escHtml(cl.label)}</span>
+    </div>`;
+  }).join('');
+}
+
+function toggleCl(id) {
+  if (!STATE.current) return;
+  if (!STATE.current.clValues) STATE.current.clValues = {};
+  STATE.current.clValues[id] = !STATE.current.clValues[id];
+  const el = document.querySelector(`.cl-item[data-cl="${id}"]`);
+  if (el) el.classList.toggle('on', STATE.current.clValues[id]);
+}
+
+function closeSheet() {
+  document.getElementById('ciSheet').classList.remove('show');
+  document.getElementById('scrim').classList.remove('show');
+  STATE.current = null;
+}
+document.getElementById('scrim').addEventListener('click', closeSheet);
+
+// ─── 受付/欠席/取消 実行 ────────────────────────────────
+async function doAction(action) {
+  if (!STATE.current) return;
+
+  if (STATE.pinEnabled && !STATE.sessionToken) {
+    openPinDialog(true);
+    return;
+  }
+
+  const rowIndex  = STATE.current.rowIndex;
+  const clValues  = STATE.current.clValues || {};
+  const staffName = '';
+
+  setLoading(true, action === 'check_in' ? '受付中...' : action === 'absent' ? '欠席処理中...' : '取消中...');
+
+  try {
+    const res = await callGAS('checkIn', rowIndex, action, clValues, staffName, STATE.sessionToken);
+    if (!res.success) {
+      if (res.authRequired) {
+        openPinDialog(true);
+      } else {
+        showSnack('エラー: ' + res.error, '⚠', 5000);
+      }
+      return;
+    }
+
+    const a = STATE.attendees.find(x => x.rowIndex === rowIndex);
+    if (a) {
+      a.status    = res.updatedStatus;
+      if (res.checkInTime) a.checkInTime = res.checkInTime;
+      if (STATE.current.clValues) a.clValues = { ...STATE.current.clValues };
+    }
+
+    const msgs = { check_in: '受付しました', absent: '欠席にしました', cancel: '取消しました' };
+    const icons = { check_in: '✓', absent: '✕', cancel: '↩' };
+    showSnack(msgs[action], icons[action]);
+
+    closeSheet();
+    renderAll();
+  } catch (err) {
+    showSnack('通信エラー: ' + err.message, '⚠', 5000);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function doUpdateCl() {
+  if (!STATE.current) return;
+
+  setLoading(true, 'チェックリスト更新中...');
+  try {
+    const res = await callGAS('updateChecklist',
+      STATE.current.rowIndex,
+      STATE.current.clValues || {},
+      STATE.sessionToken
+    );
+    if (!res.success) {
+      showSnack('エラー: ' + res.error, '⚠');
+      return;
+    }
+    const a = STATE.attendees.find(x => x.rowIndex === STATE.current.rowIndex);
+    if (a) a.clValues = { ...STATE.current.clValues };
+    showSnack('チェックリストを更新しました', '✓');
+    closeSheet();
+    renderAll();
+  } catch (err) {
+    showSnack('通信エラー: ' + err.message, '⚠', 5000);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ─── PIN ダイアログ ───────────────────────────────────────
+let pinPendingAction = false;
+function openPinDialog(fromAction = false) {
+  pinPendingAction = fromAction;
+  const dw = document.getElementById('pinDlgWrap');
+  const ds = document.getElementById('pinDlgScrim');
+  document.getElementById('pinInput').value = '';
+  document.getElementById('pinError').textContent = '';
+  dw.classList.add('show');
+  ds.classList.add('show');
+  setTimeout(() => document.getElementById('pinInput').focus(), 320);
+}
+function closePinDialog() {
+  document.getElementById('pinDlgWrap').classList.remove('show');
+  document.getElementById('pinDlgScrim').classList.remove('show');
+}
+async function submitPin() {
+  const raw = document.getElementById('pinInput').value;
+  if (!raw) return;
+  const hashed = await sha256(raw);
+  setLoading(true, '認証中...');
+  try {
+    const res = await callGAS('verifyPin', hashed);
+    if (!res.success) {
+      document.getElementById('pinError').textContent = res.error || 'PINが正しくありません';
+      document.getElementById('pinInput').value = '';
+      document.getElementById('pinInput').focus();
+      return;
+    }
+    STATE.sessionToken = res.sessionToken;
+    closePinDialog();
+    showSnack('認証しました', '🔓');
+    if (pinPendingAction && STATE.current) {
+      // シートが閉じられていなければ操作を再試行しない（再タップを促す）
+      showSnack('もう一度受付ボタンを押してください', 'ℹ', 4000);
+    }
+  } catch (err) {
+    document.getElementById('pinError').textContent = '通信エラー';
+  } finally {
+    setLoading(false);
+  }
+}
+document.getElementById('pinInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitPin();
+});
+
+// ─── 集計ダイアログ ───────────────────────────────────────
+function openSummary() {
+  const all     = STATE.attendees;
+  const checked = all.filter(a => a.status === 'checked_in');
+  const absent  = all.filter(a => a.status === 'absent');
+  const pending = all.filter(a => a.status === 'pending');
+  const total   = all.length;
+  const checkedN = checked.length;
+  const absentN  = absent.length;
+  const pendingN = pending.length;
+  const pct = total ? Math.round(checkedN / total * 100) : 0;
+
+  document.getElementById('sumKpiChecked').textContent = checkedN;
+  document.getElementById('sumKpiAbsent').textContent  = absentN;
+  document.getElementById('sumKpiPending').textContent = pendingN;
+  document.getElementById('sumTitle').textContent = STATE.eventName + ' 集計';
+  document.getElementById('sumSubtitle').textContent = STATE.eventDate || '';
+
+  const pfGreen = document.getElementById('pfGreen');
+  const pfRed   = document.getElementById('pfRed');
+  pfGreen.style.width = total ? (checkedN / total * 100) + '%' : '0%';
+  pfRed.style.width   = total ? (absentN  / total * 100) + '%' : '0%';
+
+  document.getElementById('sumPct').textContent = `出席率 ${pct}%`;
+  document.getElementById('sumPctOf').textContent = `${checkedN} / ${total} 名`;
+
+  // チェックリスト達成率
+  const clStats = document.getElementById('clStats');
+  if (!STATE.clItems.length) {
+    clStats.innerHTML = '<div style="color:var(--md-outline);font-size:13px">チェックリストが設定されていません</div>';
+  } else {
+    clStats.innerHTML = STATE.clItems.map(cl => {
+      const done = checked.filter(a => a.clValues && a.clValues[cl.id]).length;
+      const pct2 = checkedN ? Math.round(done / checkedN * 100) : 0;
+      return `<div class="cl-stat">
+        <div class="cl-stat-row"><span class="cl-stat-name">${escHtml(cl.label)}</span><span class="cl-stat-num">${done} / ${checkedN}人 (${pct2}%)</span></div>
+        <div class="cl-stat-bar"><div class="cl-stat-fill" style="width:${pct2}%"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  // 出席者・欠席者リスト
+  document.getElementById('checkedNames').innerHTML = checked.map(a => `<span class="name-pill">${escHtml(a.name)}</span>`).join('');
+  document.getElementById('absentNames').innerHTML  = absent.map(a  => `<span class="name-pill">${escHtml(a.name)}</span>`).join('');
+  document.getElementById('pendingNames').innerHTML = pending.map(a => `<span class="name-pill">${escHtml(a.name)}</span>`).join('');
+
+  document.getElementById('sumDlgWrap').classList.add('show');
+  document.getElementById('sumDlgScrim').classList.add('show');
+}
+function closeSummary() {
+  document.getElementById('sumDlgWrap').classList.remove('show');
+  document.getElementById('sumDlgScrim').classList.remove('show');
+}
+document.getElementById('sumDlgScrim').addEventListener('click', closeSummary);
+
+function toggleNames(id) {
+  const wrap = document.getElementById(id + 'Names');
+  const toggle = document.getElementById(id + 'Toggle');
+  const show = !wrap.classList.contains('show');
+  wrap.classList.toggle('show', show);
+  toggle.classList.toggle('open', show);
+}
+
+// ─── 設定画面へ遷移 ──────────────────────────────────────
+function goToSettings() {
+  window.location.href = '?page=settings';
+}
+
+// ─── 定期更新（30秒ごと） ────────────────────────────────
+let pollTimer;
+function startPolling() {
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await callGAS('getAttendees');
+      if (res && res.success) {
+        STATE.attendees = res.attendees || [];
+        renderAll();
+      }
+    } catch (_) {}
+  }, 30000);
+}
+
+// ─── 初期化 ───────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadAttendees().then(startPolling);
+});
+</script>

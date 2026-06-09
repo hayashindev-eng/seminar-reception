@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<?!= include('styles.css') ?>
+<style>
+/* 設定ページ専用レイアウト上書き */
+html, body { height:auto; overflow:auto; }
+.app { height:auto; min-height:100vh; }
+.settings-view { display:none; }
+.settings-view.show { display:block; padding-bottom:32px; }
+</style>
+</head>
+<body>
+
+<!-- ローディング -->
+<div class="loading-overlay" id="loadingOverlay" style="display:none">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">処理中...</div>
+</div>
+
+<div class="app">
+
+  <!-- ─── トップバー ──────────────── -->
+  <header class="top-bar">
+    <div class="top-bar-brand">
+      <div class="brand-dot"></div>
+      <div>
+        <div class="brand-title">⚙ 設定</div>
+        <div class="brand-subtitle">セミナー受付システム</div>
+      </div>
+    </div>
+    <div class="top-bar-right">
+      <a href="?page=reception" style="text-decoration:none">
+        <button class="text-btn tonal-btn ripple-host">← 受付画面へ戻る</button>
+      </a>
+    </div>
+  </header>
+
+  <!-- ─── 設定コンテンツ ──────────── -->
+  <div class="settings-view show">
+    <div class="sg">
+
+      <!-- イベント情報 -->
+      <div class="sc">
+        <div class="sc-title">イベント情報</div>
+        <div class="field">
+          <div class="field-lbl">イベント名</div>
+          <input class="field-input" id="eventName" type="text" placeholder="6月セミナー">
+        </div>
+        <div class="field">
+          <div class="field-lbl">開催日</div>
+          <input class="field-input" id="eventDate" type="date">
+        </div>
+        <div class="field">
+          <div class="field-lbl">担当スタッフ名（受付記録に使用）</div>
+          <input class="field-input" id="staffName" type="text" placeholder="例: 山田">
+        </div>
+      </div>
+
+      <!-- 当日対象者フィルター -->
+      <div class="sc">
+        <div class="sc-title">当日の対象者フィルター</div>
+        <div style="font-size:12px;color:var(--md-outline);margin-bottom:12px">
+          日付・拠点名が入った列の値で当日参加者を絞り込みます。<br>
+          例: <code style="background:var(--md-surface-1);padding:2px 6px;border-radius:4px;font-size:11px">2026年6月10日 (水) 平和台BASE開催</code>
+        </div>
+        <div class="col-grid" style="grid-template-columns:80px 1fr;gap:8px;margin-bottom:10px">
+          <div class="field">
+            <div class="field-lbl">フィルター列番号</div>
+            <input class="field-input" id="colFilter" type="number" min="1" max="100" value="7" placeholder="7">
+          </div>
+          <div class="field">
+            <div class="field-lbl">対象値（当日の日付・拠点）</div>
+            <input class="field-input" id="filterValue" type="text" placeholder="例: 2026年6月10日 (水) 平和台BASE開催">
+          </div>
+        </div>
+        <button class="btn-test ripple-host" onclick="loadFilterValues()" style="margin-bottom:8px">
+          📋 シートから選択肢を取得
+        </button>
+        <select class="field-select" id="filterValueSelect" style="display:none;margin-top:6px"></select>
+        <div style="font-size:11px;color:var(--md-outline);margin-top:6px">※ 空欄にすると全行を対象にします</div>
+      </div>
+
+      <!-- スプレッドシート連携 -->
+      <div class="sc">
+        <div class="sc-title">スプレッドシート連携</div>
+        <div class="field">
+          <div class="field-lbl">スプレッドシートURL または ID</div>
+          <input class="field-input" id="spreadsheetId" type="text" placeholder="https://docs.google.com/spreadsheets/d/...">
+        </div>
+        <div class="field">
+          <div class="field-lbl">シート名</div>
+          <input class="field-input" id="sheetName" type="text" placeholder="フォームの回答 1">
+          <select class="field-select" id="sheetNameSelect" style="display:none;margin-top:6px"></select>
+        </div>
+        <div class="col-grid">
+          <div class="field">
+            <div class="field-lbl">ヘッダー行</div>
+            <input class="field-input" id="headerRow" type="number" min="1" value="1">
+          </div>
+          <div class="field">
+            <div class="field-lbl">データ開始行</div>
+            <input class="field-input" id="dataStartRow" type="number" min="2" value="2">
+          </div>
+        </div>
+        <div id="testResult"></div>
+        <div style="margin-top:10px">
+          <button class="btn-test ripple-host" onclick="testConnection()">🔗 接続テスト</button>
+        </div>
+      </div>
+
+      <!-- 列マッピング -->
+      <div class="sc full">
+        <div class="sc-title">列マッピング（列番号を入力、0=未使用）</div>
+        <div class="col-grid">
+          <div class="field">
+            <div class="field-lbl">氏名列 *</div>
+            <input class="field-input" id="colName" type="number" min="1" max="100" placeholder="2">
+          </div>
+          <div class="field">
+            <div class="field-lbl">メールアドレス列</div>
+            <input class="field-input" id="colEmail" type="number" min="0" max="100" placeholder="3">
+          </div>
+          <div class="field">
+            <div class="field-lbl">電話番号列</div>
+            <input class="field-input" id="colPhone" type="number" min="0" max="100" placeholder="0（未使用）">
+          </div>
+          <div class="field">
+            <div class="field-lbl">参加種別列（VIP等）</div>
+            <input class="field-input" id="colTicketType" type="number" min="0" max="100" placeholder="0（未使用）">
+          </div>
+          <div class="field">
+            <div class="field-lbl">備考列</div>
+            <input class="field-input" id="colNotes" type="number" min="0" max="100" placeholder="0（未使用）">
+          </div>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--md-outline-var)">
+          <div class="field-lbl" style="margin-bottom:10px">書き込み先列（受付結果を追記する列）</div>
+          <div class="col-grid">
+            <div class="field">
+              <div class="field-lbl">受付状態列 *</div>
+              <input class="field-input" id="colStatus" type="number" min="1" max="100" placeholder="10">
+            </div>
+            <div class="field">
+              <div class="field-lbl">受付時刻列</div>
+              <input class="field-input" id="colTime" type="number" min="1" max="100" placeholder="11">
+            </div>
+            <div class="field">
+              <div class="field-lbl">担当者列</div>
+              <input class="field-input" id="colStaff" type="number" min="1" max="100" placeholder="12">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- チェックリスト -->
+      <div class="sc full">
+        <div class="sc-title">チェックリスト項目</div>
+        <div style="font-size:12px;color:var(--md-outline);margin-bottom:12px">
+          受付時に確認する項目を追加できます。各項目の記録はスプレッドシートの指定列に書き込まれます（✓ / 空白）。
+        </div>
+        <div class="cl-s-list" id="clSettingList"></div>
+        <button class="add-field-btn ripple-host" onclick="addClItem()">＋ 項目を追加する</button>
+      </div>
+
+      <!-- セキュリティ -->
+      <div class="sc">
+        <div class="sc-title">セキュリティ</div>
+        <div class="switch-row">
+          <div>
+            <div class="switch-lbl">PIN認証</div>
+            <div class="switch-sub">受付操作にPINコードを要求する</div>
+          </div>
+          <div class="switch" id="pinSwitch" onclick="toggleSwitch('pinSwitch')">
+            <div class="switch-thumb"></div>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--md-outline-var)">
+          <div class="field-lbl" style="margin-bottom:12px;font-size:13px;font-weight:700">PINを変更する</div>
+          <div class="field">
+            <div class="field-lbl">現在のPIN（既にある場合）</div>
+            <input class="field-input" id="currentPin" type="password" inputmode="numeric" placeholder="現在のPIN" autocomplete="current-password">
+          </div>
+          <div class="field">
+            <div class="field-lbl">新しいPIN（4桁以上）</div>
+            <input class="field-input" id="newPin" type="password" inputmode="numeric" placeholder="新しいPIN" autocomplete="new-password">
+          </div>
+          <div class="field">
+            <div class="field-lbl">新しいPIN（確認）</div>
+            <input class="field-input" id="confirmPin" type="password" inputmode="numeric" placeholder="確認のため再入力" autocomplete="new-password">
+          </div>
+        </div>
+      </div>
+
+      <!-- 保存ボタン -->
+      <div class="sg-actions">
+        <button class="btn-test ripple-host" onclick="window.location.href='?page=reception'">キャンセル</button>
+        <button class="btn-save ripple-host" onclick="saveSettings()">💾 設定を保存する</button>
+      </div>
+
+    </div><!-- /.sg -->
+  </div><!-- /.settings-view -->
+</div><!-- /.app -->
+
+<!-- スナックバー -->
+<div class="snack-stack" id="snackStack"></div>
+
+<?!= include('settings.js') ?>
+</body>
+</html>
