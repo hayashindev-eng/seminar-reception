@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
 <?!= include('styles.css') ?>
 </head>
 <body>
@@ -35,10 +35,10 @@
         <span id="hdrChecked">0</span>/<span id="hdrTotal">0</span> 受付済
       </div>
       <button class="text-btn tonal-btn ripple-host" onclick="openSummary()" style="margin-left:6px">
-        📊 集計
+        <span class="nav-icon" style="font-size:18px;vertical-align:-4px">bar_chart</span> 集計
       </button>
-      <button class="icon-btn ripple-host" onclick="goToSettings()" title="設定" aria-label="設定">⚙</button>
-      <button class="icon-btn ripple-host" onclick="loadAttendees()" title="更新" aria-label="更新">↻</button>
+      <button class="icon-btn ripple-host" onclick="goToSettings()" title="設定" aria-label="設定"><span class="nav-icon" style="font-size:22px">settings</span></button>
+      <button class="icon-btn ripple-host" onclick="loadAttendees()" title="更新" aria-label="更新"><span class="nav-icon" style="font-size:22px">refresh</span></button>
     </div>
   </header>
 
@@ -47,28 +47,28 @@
     <!-- ─── 左ナビレール ───────────────── -->
     <nav class="nav-rail">
       <div class="search-field">
-        <span class="search-icon">🔍</span>
+        <span class="nav-icon" style="font-size:20px;color:var(--md-outline)">search</span>
         <input class="search-input" id="searchInput" type="search" placeholder="名前・メールで検索..." autocomplete="off">
       </div>
 
       <div class="nav-label">フィルター</div>
       <button class="nav-item ripple-host ripple-dark active" id="navItem_all" onclick="setFilter('all')">
-        <span class="nav-item-icon">👥</span>
+        <div class="nav-indicator"><span class="nav-icon">group</span></div>
         <span class="nav-item-label">全員</span>
         <span class="nav-count" id="navCountAll">0</span>
       </button>
       <button class="nav-item ripple-host ripple-dark" id="navItem_pending" onclick="setFilter('pending')">
-        <span class="nav-item-icon">⏳</span>
+        <div class="nav-indicator"><span class="nav-icon">pending_actions</span></div>
         <span class="nav-item-label">未受付</span>
         <span class="nav-count" id="navCountPending">0</span>
       </button>
       <button class="nav-item ripple-host ripple-dark" id="navItem_checked" onclick="setFilter('checked')">
-        <span class="nav-item-icon">✓</span>
+        <div class="nav-indicator"><span class="nav-icon">how_to_reg</span></div>
         <span class="nav-item-label">受付済</span>
         <span class="nav-count" id="navCountChecked">0</span>
       </button>
       <button class="nav-item ripple-host ripple-dark" id="navItem_absent" onclick="setFilter('absent')">
-        <span class="nav-item-icon">✕</span>
+        <div class="nav-indicator"><span class="nav-icon">person_off</span></div>
         <span class="nav-item-label">欠席</span>
         <span class="nav-count" id="navCountAbsent">0</span>
       </button>

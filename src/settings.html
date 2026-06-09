@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
 <?!= include('styles.css') ?>
 <style>
 /* 設定ページ専用レイアウト上書き */
@@ -29,7 +29,7 @@ html, body { height:auto; overflow:auto; }
     <div class="top-bar-brand">
       <div class="brand-dot"></div>
       <div>
-        <div class="brand-title">⚙ 設定</div>
+        <div class="brand-title"><span class="nav-icon" style="font-size:20px;vertical-align:-4px">settings</span> 設定</div>
         <div class="brand-subtitle">セミナー受付システム</div>
       </div>
     </div>
@@ -79,7 +79,7 @@ html, body { height:auto; overflow:auto; }
           </div>
         </div>
         <button class="btn-test ripple-host" onclick="loadFilterValues()" style="margin-bottom:8px">
-          📋 シートから選択肢を取得
+          <span class="nav-icon" style="font-size:17px;vertical-align:-4px">checklist</span> シートから選択肢を取得
         </button>
         <select class="field-select" id="filterValueSelect" style="display:none;margin-top:6px"></select>
         <div style="font-size:11px;color:var(--md-outline);margin-top:6px">※ 空欄にすると全行を対象にします</div>
@@ -109,7 +109,7 @@ html, body { height:auto; overflow:auto; }
         </div>
         <div id="testResult"></div>
         <div style="margin-top:10px">
-          <button class="btn-test ripple-host" onclick="testConnection()">🔗 接続テスト</button>
+          <button class="btn-test ripple-host" onclick="testConnection()"><span class="nav-icon" style="font-size:17px;vertical-align:-4px">cable</span> 接続テスト</button>
         </div>
       </div>
 
@@ -199,7 +199,7 @@ html, body { height:auto; overflow:auto; }
       <!-- 保存ボタン -->
       <div class="sg-actions">
         <button class="btn-test ripple-host" onclick="window.location.href='?page=reception'">キャンセル</button>
-        <button class="btn-save ripple-host" onclick="saveSettings()">💾 設定を保存する</button>
+        <button class="btn-save ripple-host" onclick="saveSettings()"><span class="nav-icon" style="font-size:17px;vertical-align:-4px">save</span> 設定を保存する</button>
       </div>
 
     </div><!-- /.sg -->
