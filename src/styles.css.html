@@ -590,4 +590,36 @@ body {
   55%  { transform:scale(1.06);opacity:1; }
   100% { transform:scale(1);opacity:1; }
 }
+
+/* ─── 名簿印刷 ─────────────────────────────────────── */
+.print-dialog { width:880px; }
+.print-head { margin-bottom:14px; }
+.print-title { font-size:20px;font-weight:700;color:var(--md-on-surface); }
+.print-meta { display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--md-on-surface-var);margin-top:5px; }
+.print-table { width:100%;border-collapse:collapse;font-size:13px; }
+.print-table th,.print-table td { border:1px solid var(--md-outline-var);padding:6px 9px;text-align:left; }
+.print-table th { background:var(--md-surface-1);font-weight:700;font-size:12px;white-space:nowrap; }
+.print-table .ct { text-align:center; }
+.print-table .nm { font-weight:600;font-size:14px; }
+.print-table .st-checked_in { color:var(--status-checked);font-weight:700; }
+.print-table .st-absent     { color:var(--status-absent);font-weight:700; }
+
+@media print {
+  body * { visibility:hidden !important; }
+  #printDlgWrap, #printDlgWrap * { visibility:visible !important; }
+  #printDlgScrim { display:none !important; }
+  #printDlgWrap {
+    position:absolute !important;top:0 !important;left:0 !important;right:auto !important;bottom:auto !important;
+    display:block !important;z-index:9999 !important;
+  }
+  #printDlgWrap .dialog {
+    opacity:1 !important;transform:none !important;
+    box-shadow:none !important;border-radius:0 !important;
+    width:100% !important;max-width:none !important;max-height:none !important;overflow:visible !important;
+  }
+  #printDlgWrap .dlg-body { overflow:visible !important;max-height:none !important;padding:0 !important; }
+  .no-print { display:none !important; }
+  .print-table th { background:#eee !important;-webkit-print-color-adjust:exact;print-color-adjust:exact; }
+  .print-table tr { page-break-inside:avoid; }
+}
 </style>

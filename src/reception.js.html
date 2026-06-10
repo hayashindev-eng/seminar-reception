@@ -580,6 +580,58 @@ document.getElementById('addNameInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') submitAdd();
 });
 
+// ─── 名簿印刷 ─────────────────────────────────────────────
+function openPrintView() {
+  const list = STATE.attendees.slice().sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  const checked = list.filter(a => a.status === 'checked_in').length;
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}/${pad(now.getMonth() + 1)}/${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  const clCols = STATE.clItems.map(cl => `<th>${escHtml(cl.label)}</th>`).join('');
+  const rows = list.map((a, i) => {
+    const st   = a.status === 'checked_in' ? '受付済' : a.status === 'absent' ? '欠席' : '';
+    const type = typeLabel(a.ticketType);
+    const clCells = STATE.clItems.map(cl =>
+      `<td class="ct">${a.clValues && a.clValues[cl.id] ? '✓' : ''}</td>`).join('');
+    return `<tr>
+      <td class="ct">${i + 1}</td>
+      <td class="nm">${escHtml(a.name)}</td>
+      <td class="ct">${type ? escHtml(type.label) : ''}</td>
+      <td class="ct st-${a.status}">${st}</td>
+      <td class="ct">${a.checkInTime ? escHtml(a.checkInTime) : ''}</td>
+      ${clCells}
+    </tr>`;
+  }).join('');
+
+  const colspan = 5 + STATE.clItems.length;
+  document.getElementById('printArea').innerHTML = `
+    <div class="print-head">
+      <div class="print-title">${escHtml(STATE.eventName || 'セミナー受付')}</div>
+      <div class="print-meta">
+        <span>${escHtml(STATE.eventDate || '')}</span>
+        <span>受付済 ${checked} / ${list.length} 名</span>
+        <span>出力 ${stamp}</span>
+      </div>
+    </div>
+    <table class="print-table">
+      <thead><tr>
+        <th>No</th><th>氏名</th><th>種別</th><th>受付</th><th>受付時刻</th>${clCols}
+      </tr></thead>
+      <tbody>${rows || `<tr><td colspan="${colspan}" class="ct">参加者がいません</td></tr>`}</tbody>
+    </table>`;
+
+  document.getElementById('printDlgWrap').classList.add('show');
+  document.getElementById('printDlgScrim').classList.add('show');
+}
+function closePrintView() {
+  document.getElementById('printDlgWrap').classList.remove('show');
+  document.getElementById('printDlgScrim').classList.remove('show');
+}
+function doPrint() {
+  window.print();
+}
+
 // ─── 定期更新（30秒ごと） ────────────────────────────────
 let pollTimer;
 function startPolling() {

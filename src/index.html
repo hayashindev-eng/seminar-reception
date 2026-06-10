@@ -40,6 +40,7 @@
       <button class="text-btn tonal-btn ripple-host" onclick="openSummary()">
         <span class="nav-icon" style="font-size:18px;vertical-align:-4px">bar_chart</span> 集計
       </button>
+      <button class="icon-btn ripple-host" onclick="openPrintView()" title="名簿を印刷" aria-label="印刷"><span class="nav-icon" style="font-size:22px">print</span></button>
       <button class="icon-btn ripple-host" onclick="goToSettings()" title="設定" aria-label="設定"><span class="nav-icon" style="font-size:22px">settings</span></button>
       <button class="icon-btn ripple-host" onclick="loadAttendees()" title="更新" aria-label="更新"><span class="nav-icon" style="font-size:22px">refresh</span></button>
     </div>
@@ -190,6 +191,29 @@
     </div>
     <div class="dlg-footer">
       <button class="btn-text ripple-host ripple-dark" onclick="closeSummary()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 名簿印刷ダイアログ ───────── -->
+<div class="dlg-scrim" id="printDlgScrim" onclick="closePrintView()"></div>
+<div class="dlg-wrap" id="printDlgWrap">
+  <div class="dialog print-dialog" role="dialog" aria-modal="true">
+    <div class="dlg-hdr no-print">
+      <div>
+        <div class="dlg-title">当日参加者名簿</div>
+        <div class="dlg-subtitle">印刷して受付控えに使えます</div>
+      </div>
+      <button class="sheet-close ripple-host" onclick="closePrintView()" aria-label="閉じる">✕</button>
+    </div>
+    <div class="dlg-body">
+      <div id="printArea"></div>
+    </div>
+    <div class="dlg-footer no-print">
+      <button class="btn-text ripple-host ripple-dark" onclick="closePrintView()">閉じる</button>
+      <button class="btn-filled ripple-host" style="flex:none;padding:0 24px;height:44px" onclick="doPrint()">
+        <span class="nav-icon" style="font-size:18px;vertical-align:-4px">print</span> 印刷する
+      </button>
     </div>
   </div>
 </div>
