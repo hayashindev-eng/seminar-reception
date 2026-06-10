@@ -218,8 +218,9 @@ function addAttendee(name, sessionToken) {
 
       sheet.getRange(newRow, colName).setValue(cleanName);
 
-      // 当日フィルターが設定されていれば、その値も書いて当日対象に含める
-      const colFilter = parseInt(cfg.COL_FILTER) || 0;
+      // 当日フィルターが設定されていれば、その値も書いて当日対象に含める。
+      // 列番号のデフォルト(7=G列)は getAttendees と必ず一致させること。
+      const colFilter = parseInt(cfg.COL_FILTER) || 7;
       const filterVal = (cfg.FILTER_VALUE || '').trim();
       if (colFilter > 0 && filterVal) {
         sheet.getRange(newRow, colFilter).setValue(filterVal);
